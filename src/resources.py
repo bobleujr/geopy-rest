@@ -1,5 +1,6 @@
 import requests
 import json
+import os
 
 
 class WorkspaceNotFound(Exception):
@@ -9,6 +10,11 @@ class WorkspaceNotFound(Exception):
 class ImproperCredentials(Exception):
     pass
 
+class ImproperFormat(Exception):
+    pass
+
+class ParameterRequired(Exception):
+    pass
 
 class Geoserver(object):
     """
@@ -61,9 +67,48 @@ class Geoserver(object):
             raise WorkspaceNotFound("Workspace couldn't be found")
 
 
+
+    def upload_shapefile_zip(self, workspace_name, datastore_name=None, file=None, address=None):
+
+        if not (file or address):
+            raise ParameterRequired('At least one keyword of %s=x or %s=y is required' % ('address', 'file'))
+        else:
+            if address:
+                try:
+                    file = open(address, 'rb')
+                    filename, file_extension = os.path.splitext(file.name)
+                    file = file.read()
+                except IOError:
+                    print('Ops, it seems the address you provided is not correct')
+
+            if file_extension != '.zip':
+                raise ImproperFormat('A .zip file is required')
+
+            if (not datastore_name) and filename.index('/') != -1:
+                datastore_name = filename.split('/')[-1]
+            elif not datastore_name:
+                datastore_name = filename.split('\\')[-1]
+
+        headers = {
+            'Content-type': 'application/zip',
+        }
+
+        url = '%sworkspaces/%s/datastores/%s/file.shp' % (self.geoserver_url,workspace_name, datastore_name)
+
+        response = requests.put(url, headers=headers,data=file, auth=self.auth)
+
+        if response.status_code != 201:
+            raise ImproperFormat('The information provided was invalid')
+        else:
+            return response.status_code
+
+
 geoserv = Geoserver()
 
-code = geoserv.create_workspace('my_workspace')
-code, results = geoserv.get_workspace('my_workspace')
-code, results = geoserv.list_workspaces()
+# code = geoserv.create_workspace('my_workspace')
+# code, results = geoserv.get_workspace('my_workspace')
+# code, results = geoserv.list_workspaces()
+
+geoserv.upload_shapefile_zip('my_workspace', address='/Users/bobleujr/Downloads/shapefile_example.zip')
+
 
